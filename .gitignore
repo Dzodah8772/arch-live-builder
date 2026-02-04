@@ -1,0 +1,7 @@
+# сборочные каталоги archiso
+work/
+out/
+archflux/
+
+# временные файлы
+*.log
