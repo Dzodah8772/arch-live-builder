@@ -1,0 +1,15 @@
+# Базовые пакеты ArchFlux OS (минимальный live-набор)
+base
+linux
+linux-firmware
+mkinitcpio
+systemd
+bash
+coreutils
+util-linux
+iproute2
+iputils
+openssh
+networkmanager
+nano
+vim
