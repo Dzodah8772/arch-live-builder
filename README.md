@@ -1,34 +1,41 @@
-#!/usr/bin/env bash
-set -euo pipefail
+# ArchFlux OS — сборка live-ISO
 
-# Скрипт: build.sh
-# Требования: запустите на Arch Linux или в контейнере с pacman (root/возможность sudo).
-# Устанавливает archiso при необходимости, создаёт профиль ArchFlux и собирает ISO.
+Этот репозиторий содержит заготовку для сборки Arch-based live ISO (ArchFlux OS) через `archiso`.
 
-PROFILE_NAME="archflux"
-WORKDIR="$PWD/work"
-OUTDIR="$PWD/out"
-SRCTEMPLATE="/usr/share/archiso/configs/releng"
+## Быстрый старт (локально)
 
-if ! command -v mkarchiso >/dev/null 2>&1; then
-  echo "archiso не найден. Устанавливаю..."
-  sudo pacman -S --needed archiso
-fi
+1. Убедитесь, что вы на Arch Linux (или в среде с `pacman`).
+2. Запустите скрипт сборки:
 
-# Подготовка рабочей копии профиля
-rm -rf "$PROFILE_NAME" "$WORKDIR" "$OUTDIR"
-cp -r "$SRCTEMPLATE" "$PROFILE_NAME"
+```bash
+./scripts/build.sh
+```
 
-# Подменяем packages.x86_64 на наш
-cp packages.x86_64 "$PROFILE_NAME"/packages.x86_64
+Скрипт автоматически установит `archiso` при необходимости и соберёт ISO в директорию `out/`.
 
-# Копируем airootfs overlay (директория с конфигами для live-окружения)
-rm -rf "$PROFILE_NAME"/airootfs
-cp -r airootfs "$PROFILE_NAME"/airootfs
+## Сборка в Docker
 
-# Опционально: добавьте свои файлы в isolinux/efi, загрузочные скрипты и др.
+Для воспроизводимого окружения можно собрать ISO в контейнере:
 
-echo "Запускаю сборку ISO (mkarchiso)..."
-sudo mkarchiso -v -w "$WORKDIR" -o "$OUTDIR" "$PROFILE_NAME"
+```bash
+docker build -t archflux-builder .
+```
 
-echo "Готово. Результат в: $OUTDIR"
+Запуск сборки:
+
+```bash
+docker run --rm -v "$(pwd)":/workspace archflux-builder
+```
+
+> Важно: контейнер использует `archiso`, поэтому необходим доступ к `pacman` зеркалам.
+
+## Настройка содержимого ISO
+
+- `packages.x86_64` — список пакетов, который будет использован при сборке (в репозитории есть минимальный набор).
+- `airootfs/` — overlay директории, которые попадут в live-окружение (пример: `airootfs/etc/hostname`).
+- `profiledef.sh` — параметры ISO (label, имя, режимы загрузки).
+- `boot/` — загрузчик (isolinux/systemd-boot) и конфиги для BIOS/UEFI.
+
+## Полезные материалы
+
+Список задач и план работ расположен в каталоге [`projects/`](projects/).
