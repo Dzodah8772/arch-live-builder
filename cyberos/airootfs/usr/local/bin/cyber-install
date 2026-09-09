@@ -1,0 +1,96 @@
+#!/bin/bash
+set -euo pipefail
+clear
+cat /etc/issue
+
+if ! ping -c1 -W2 archlinux.org &>/dev/null; then
+  echo "Нет подключения к интернету."
+  echo "Подключитесь через iwctl или проверьте Ethernet, затем запустите cyber-install снова."
+  exit 1
+fi
+
+lsblk -d -o NAME,SIZE,MODEL
+echo
+read -rp "Целевой диск (/dev/sda или /dev/vda): " DISK
+[[ -b "$DISK" ]] || { echo "Устройство не найдено."; exit 1; }
+read -rp "Введите ERASE для продолжения: " CONFIRM
+[[ "$CONFIRM" == "ERASE" ]] || exit 0
+read -rp "Часовой пояс [UTC]: " TZONE; TZONE=${TZONE:-UTC}
+[[ -f "/usr/share/zoneinfo/$TZONE" ]] || { echo "Неизвестная таймзона."; exit 1; }
+read -rp "Имя пользователя [cyber]: " USERNAME; USERNAME=${USERNAME:-cyber}
+read -rp "Имя хоста [cyberos]: " HOSTNAME; HOSTNAME=${HOSTNAME:-cyberos}
+while true; do
+  read -rsp "Пароль: " PASS; echo
+  read -rsp "Повторите пароль: " PASS2; echo
+  [[ "$PASS" == "$PASS2" && -n "$PASS" ]] && break
+  echo "Пароли не совпадают или пусты."
+done
+
+UCODE_PKG=intel-ucode
+grep -qi amd /proc/cpuinfo && UCODE_PKG=amd-ucode
+cleanup(){ umount -R /mnt 2>/dev/null || true; }
+trap cleanup ERR
+umount -R /mnt 2>/dev/null || true
+wipefs -af "$DISK"
+parted -s "$DISK" mklabel gpt
+parted -s "$DISK" mkpart ESP fat32 1MiB 513MiB
+parted -s "$DISK" set 1 esp on
+parted -s "$DISK" mkpart primary btrfs 513MiB 100%
+case "$DISK" in *nvme*|*mmcblk*) P1="${DISK}p1"; P2="${DISK}p2";; *) P1="${DISK}1"; P2="${DISK}2";; esac
+mkfs.fat -F32 "$P1"
+mkfs.btrfs -f "$P2"
+mount "$P2" /mnt
+btrfs subvolume create /mnt/@
+btrfs subvolume create /mnt/@home
+umount /mnt
+mount -o subvol=@,compress=zstd "$P2" /mnt
+mkdir -p /mnt/home /mnt/boot
+mount -o subvol=@home,compress=zstd "$P2" /mnt/home
+mount "$P1" /mnt/boot
+pacstrap -K /mnt base linux linux-firmware "$UCODE_PKG" btrfs-progs i3-wm i3status dmenu alacritty xorg-server xorg-xinit networkmanager iwd sudo nano vim zram-generator
+
+genfstab -U /mnt >>/mnt/etc/fstab
+printf '%s' "$PASS" >/tmp/cyberos-pass
+arch-chroot /mnt /bin/bash <<CHROOT
+set -e
+ln -sf "/usr/share/zoneinfo/$TZONE" /etc/localtime
+hwclock --systohc
+echo "$HOSTNAME" >/etc/hostname
+printf '127.0.0.1 localhost\n::1 localhost\n127.0.1.1 %s.localdomain %s\n' "$HOSTNAME" "$HOSTNAME" >/etc/hosts
+systemctl enable NetworkManager
+bootctl install
+cat >/boot/loader/loader.conf <<EOF
+default cyberos.conf
+timeout 3
+editor no
+EOF
+UUID=\$(blkid -s UUID -o value "$P2")
+cat >/boot/loader/entries/cyberos.conf <<EOF
+title CyberOS
+linux /vmlinuz-linux
+initrd /$UCODE_PKG.img
+initrd /initramfs-linux.img
+options root=UUID=\$UUID rootflags=subvol=@ rw
+EOF
+useradd -m -G wheel "$USERNAME"
+echo '%wheel ALL=(ALL:ALL) ALL' >/etc/sudoers.d/wheel
+cat >/home/$USERNAME/.xinitrc <<EOF
+exec i3
+EOF
+cat >/home/$USERNAME/.bash_profile <<EOF
+if [ -z "\$DISPLAY" ] && [ "\$(tty)" = "/dev/tty1" ]; then startx; fi
+EOF
+cat >/etc/systemd/zram-generator.conf <<EOF
+[zram0]
+zram-size = min(ram / 2, 2048)
+EOF
+chown -R "$USERNAME:$USERNAME" "/home/$USERNAME"
+CHROOT
+arch-chroot /mnt chpasswd <<<"$USERNAME:$PASS"
+unset PASS PASS2
+rm -f /tmp/cyberos-pass
+trap - ERR
+echo "Установка CyberOS завершена. Извлеките ISO и перезагрузитесь."
+read -rp "Нажмите Enter для перезагрузки..."
+umount -R /mnt
+reboot
