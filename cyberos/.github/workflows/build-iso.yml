@@ -1,0 +1,36 @@
+name: Build CyberOS ISO
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install archiso
+        run: pacman -Sy --noconfirm archiso
+      - name: Build ISO
+        working-directory: cyberos
+        run: |
+          chmod +x build.sh
+          ./build.sh
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberos-iso
+          path: cyberos/out/*
+      - name: Release ISO
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            cyberos/out/*.iso
+            cyberos/out/SHA256SUMS
