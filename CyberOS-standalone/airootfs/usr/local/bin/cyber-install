@@ -1,0 +1,156 @@
+#!/bin/bash
+set -euo pipefail
+clear
+cat /etc/issue
+
+# --- Загружены только в UEFI: bootctl install иначе упадёт после разметки диска ---
+if [[ ! -d /sys/firmware/efi/efivars ]]; then
+  echo "Система загружена в режиме Legacy BIOS."
+  echo "CyberOS ставится только в UEFI. В VirtualBox/QEMU включите EFI-прошивку"
+  echo "в настройках ВМ и загрузитесь заново."
+  exit 1
+fi
+
+# --- Проверка сети (иначе pacstrap упадёт уже после разметки диска) ---
+if ! ping -c1 -W2 archlinux.org &>/dev/null; then
+  echo "Нет подключения к интернету."
+  echo "Подключитесь: 'iwctl' (Wi-Fi) или проверьте кабель, затем запустите cyber-install заново."
+  exit 1
+fi
+
+lsblk -d -o NAME,SIZE,MODEL
+echo
+read -rp "Целевой диск (/dev/sda или /dev/vda): " DISK
+[[ -b "$DISK" ]] || { echo "Устройство $DISK не найдено."; exit 1; }
+
+DISK_BYTES=$(blockdev --getsize64 "$DISK")
+if (( DISK_BYTES < 8 * 1024**3 )); then
+  echo "Диск $DISK меньше 8 ГиБ ($(( DISK_BYTES / 1024**2 )) МиБ) — этого мало для рабочего стола."
+  exit 1
+fi
+
+echo
+echo "Режим установки:"
+echo "  1) Весь диск — СОТРЁТ ВСЁ на $DISK"
+echo "  2) Рядом с существующей ОС — тронет только свободное место,"
+echo "     остальные разделы (включая Windows) не трогает"
+read -rp "Выбор [1]: " MODE_CHOICE
+MODE_CHOICE=${MODE_CHOICE:-1}
+MODE="wipe"
+[[ "$MODE_CHOICE" == "2" ]] && MODE="alongside"
+
+if [[ "$MODE" == "alongside" ]]; then
+  echo "Анализирую разделы диска..."
+  PARTED_FRED=$(parted -s "$DISK" unit MiB print free)
+
+  ESP_NUM=$(awk '{ for (i=1;i<=NF;i++) if ($i=="esp" || $i=="esp,") { print $1; exit } }' <<<"$PARTED_FREE")
+  if [[ -z "$ESP_NUM" ]]; then
+    echo "На диске нет существующего EFI-раздела (ESP) — режим 'рядом с ОС' для"
+    echo "этого диска недоступен (не на чем безопасно основать общую загрузку)."
+    echo "Используйте режим 1, если диск предназначен только для CyberOS."
+    exit 1
+  fi
+
+  read -r FREE_START FREE_END FREE_SIZE < <(awk '/Free Space/ {
+      gsub("MiB","",$1); gsub("MiB","",$2); gsub("MiB","",$3);
+      if ($3+0 > max+0) { max=$3; start=$1; end=$2 }
+    }
+    END { if (max) print start, end, max }' <<<"$PARTED_FREE")
+
+  if [[ -z "${FREE_SIZE:-}" ]]; then
+    echo "На диске не найдено неразмеченного свободного места."
+    echo "Освободите место (уменьшите существующий раздел) и попробуйте снова."
+    exit 1
+  fi
+  if (( ${FREE_SIZE%%.*} < 8192 )); then
+    echo "Найдено только ~${FREE_SIZE%%.*} МиБ свободного места — нужно от 8192 МиБ (8 ГиБ)."
+    exit 1
+  fi
+
+  # Windows-раздел с данными (для автомонтирования после установки, необязательно)
+  WIN_PART_NUM=$(awk '$5=="ntfs" {
+      gsub("MiB","",$4);
+      if ($4+0 > max+0) { max=$4; num=$1 }
+    }
+    END { print num }' <<<"$PARTED_FREE")
+
+  echo
+  echo "Найден существующий EFI-раздел: №$ESP_NUM (будет ИСПОЛЬЗОВАН, не форматируется)."
+  echo "Свободное место под CyberOS: ${FREE_START%%.*}–${FREE_END%%.*} МиБ (~$(( ${FREE_SIZE%%.*} / 1024 )) ГиБ)."
+  echo "Остальные разделы на диске (включая существующую ОС) не будут тронуты."
+  echo
+  read -rp "Введите ALONGSIDE для продолжения: " CONFIRM
+  [[ "$CONFIRM" == "ALONGSIDE" ]] || { echo "Отменено."; exit 0; }
+else
+  read -rp "Введите ERASE для продолжения: " CONFIRM
+  [[ "$CONFIRM" == "ERASE" ]] || { echo "Отменено."; exit 0; }
+fi
+
+read -rp "Шифровать диск (LUKS2)? [y/N]: " ENCRYPT_ANSWER
+ENCRYPT="n"
+[[ "${ENCRYPT_ANSWER,,}" == "y" || "${ENCRYPT_ANSWER,,}" == "yes" ]] && ENCRYPT="y"
+
+if [[ "$ENCRYPT" == "y" ]]; then
+  echo "Пароль шифрования диска — отдельный от пароля пользователя,"
+  echo "спрашивается при КАЖДОЙ загрузке. Забудете — данные не восстановить."
+  while true; do
+    read -rsp "Пароль шифрования: " LUKSPASS; echo
+    read -rsp "Повторите: " LUKSPASS2; echo
+    if [[ "$LUKSPASS" == "$LUKSPASS2" && -n "$LUKSPASS" ]]; then break; fi
+    echo "Пароли не совпадают или пусты, попробуйте снова."
+  done
+fi
+
+read -rp "Часовой пояс [UTC]: " TZONE; TZONE=${TZONE:-UTC}
+[[ -f "/usr/share/zoneinfo/$TZONE" ]] || { echo "Неизвестная таймзона: $TZONE"; exit 1; }
+
+read -rp "Имя пользователя [cyber]: " USERNAME; USERNAME=${USERNAME:-cyber}
+[[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo "Некорректное имя пользователя: $USERNAME"; exit 1; }
+
+read -rp "Имя хоста [cyberos]: " HOSTNAME; HOSTNAME=${HOSTNAME:-cyberos}
+[[ "$HOSTNAME" =~ ^[a-zA-Z0-9-]+$ ]] || { echo "Некорректное имя хоста: $HOSTNAME"; exit 1; }
+
+while true; do
+  read -rsp "Пароль: " PASS; echo
+  read -rsp "Повторите пароль: " PASS2; echo
+  [[ "$PASS" == "$PASS2" && -n "$PASS" ]] && break
+  echo "Пароли не совпадают или пусты, попробуйте снова."
+done
+
+# Определяем микрокод по вендору CPU
+UCODE_PKG="intel-ucode"
+grep -qi amd /proc/cpuinfo && UCODE_PKG="amd-ucode"
+
+# --- Откат при ошибке: не оставляем диск в промежуточном состоянии ---
+cleanup() {
+  echo "Ошибка — размонтирую /mnt..."
+  umount -R /mnt 2>/dev/null || true
+  cryptsetup close cryptroot 2>/dev/null || true
+}
+trap cleanup ERR
+
+partpath() {
+  case "$DISK" in
+    *nvme*|*mmcblk*) echo "${DISK}p${1}";;
+    *) echo "${DISK}${1}";;
+  esac
+}
+
+umount -R /mnt 2>/dev/null || true
+
+if [[ "$MODE" == "alongside" ]]; then
+  P1="$(partpath "$ESP_NUM")"
+  BEFORE_PARTS=$(lsblk -ln -o NAME "$DISK" | tail -n +2)
+  parted -s "$DISK" unit MiB mkpart primary btrfs "${FREE_START}MiB" "${FREE_END}MiB"
+  partprobe "$DISK" 2>/dev/null || true
+  sleep 1
+  AFTER_PARTS=$(lsblk -ln -o NAME "$DISK" | tail -n +2)
+  NEWPART_NAME=$(comm -13 <(sort <<<"$BEFORE_PARTS") <(sort <<<"$AFTER_PARTS") | head -1)
+  if [[ -z "$NEWPART_NAME" ]]; then
+    echo "Не удалось определить новый раздел после его создания. Остановлено ДО"
+    echo "какого-либо форматирования — существующие данные не тронуты."
+    exit 1
+  fi
+  P2="/dev/$NEWPART_NAME"
+  echo "Новый раздел для CyberOS: $P2. Существующий ESP $P1 переиспользуется как есть."
+  # ВАЖНО: P1 — уже существующий ESP (мо

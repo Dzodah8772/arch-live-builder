@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=i3 (CyberOS)
+Comment=Минимальная графическая сессия i3
+Exec=i3
+Type=Application

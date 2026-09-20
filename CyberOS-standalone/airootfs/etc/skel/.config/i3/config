@@ -1,0 +1,27 @@
+# CyberOS i3 config
+set $mod Mod4
+font pango:monospace 10
+floating_modifier $mod
+
+exec --no-startup-id picom -b
+exec --no-startup-id dunst
+exec --no-startup-id nm-applet
+exec --no-startup-id pasystray
+exec --no-startup-id /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+exec --no-startup-id xdg-user-dirs-update
+exec --no-startup-id copyq
+exec --no-startup-id gammastep -O 4500
+
+bindsym $mod+Return exec alacritty
+bindsym $mod+d exec rofi -show drun
+bindsym $mod+e exec thunar
+bindsym $mod+b exec firefox
+bindsym $mod+Shift+q kill
+bindsym $mod+v exec copyq toggle
+bindsym $mod+Shift+Escape exec alacritty -e btop
+bindsym Print exec maim ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png
+bindsym $mod+Print exec maim -s | xclip -selection clipboard -t image/png
+bindsym $mod+Shift+x exec i3lock -c 0a0a0a
+bindsym XF86AudioRaiseVolume exec pamixer -i 5
+bindsym XF86AudioLowerVolume exec pamixer -d 5
+bindsym XF86AudioMute exec pamixer -t
