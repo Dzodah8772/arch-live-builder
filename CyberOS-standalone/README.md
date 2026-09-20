@@ -1,45 +1,52 @@
 # CyberOS Minimal Standalone
 
-Arch Linux based CyberOS ISO profile with i3, LightDM, Firefox, Thunar, Btrfs, systemd-boot and a custom installer.
+Arch Linux based CyberOS ISO profile for VirtualBox and UEFI/BIOS PCs.
 
-## Build
+## Included
+- Arch Linux base, i3, LightDM, Alacritty
+- Firefox, Thunar
+- NetworkManager + iwd
+- PipeWire audio
+- Btrfs tools, zram and related utilities
+- systemd-boot for UEFI and Syslinux for BIOS
+- custom `cyber-install` installer
+- Btrfs `@` and `@home` subvolumes in whole-disk install mode
 
-Requires Arch Linux or an Arch Linux container with network access:
+LUKS, snapshots and Secure Boot packages are present for future expansion; the current installer does not configure them automatically.
 
-```sh
-sudo pacman -S archiso
+## Build on Arch
+```bash
+sudo pacman -S --needed archiso
+cd CyberOS-standalone
 ./build.sh
 ```
 
-The ISO is written to `out/` and a `SHA256SUMS` file is generated.
-
-## VirtualBox
-
-Enable **EFI** in the VM firmware settings. Allocate at least 2 CPU cores, 4 GiB RAM and 20 GiB disk for a comfortable test.
-
-## Installer
-
-`cyber-install` supports:
-- UEFI-only installation
-- whole-disk installation
-- alongside-existing-OS installation using free space
-- Btrfs `@` and `@home`
-- optional LUKS2 encryption
-- systemd-boot
-- NetworkManager/iwd
-- microcode, zram, TRIM and snapshots
-- optional Secure Boot setup when firmware is in Setup Mode
-
-The installer can erase a selected disk in whole-disk mode. Back up important data and test in a VM first.
-
-## Tests
-
-```sh
-bash tests/run-tests.sh
+## Build with Docker
+From repository root:
+```bash
+docker run --rm --privileged -v "$PWD/CyberOS-standalone:/src" -w /src archlinux:latest ./build.sh
 ```
 
-These are logic/safety tests and do not replace a real VirtualBox boot test.
+The ISO and SHA256SUMS are written to `out/`.
+
+## VirtualBox
+Recommended: 2-4 CPU cores, 4 GiB RAM, 20 GiB disk, 128 MiB video memory, NAT networking.
+For UEFI testing enable **EFI**. BIOS boot is also included.
+
+Boot the ISO and run:
+```bash
+cyber-install
+```
+The current installer is whole-disk and destructive. It creates GPT, an EFI partition and Btrfs root with `@` and `@home`. Test in a disposable VM first.
+
+## CI
+`.github/workflows/cyberos-iso.yml` validates the profile and builds/uploads the ISO as a GitHub Actions artifact.
+
+## Validation
+```bash
+bash tests/run-tests.sh
+```
+These are profile/safety checks; a real VirtualBox boot test is still required.
 
 ## License
-
 MIT.
