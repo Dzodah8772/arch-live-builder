@@ -1,0 +1,38 @@
+name: CyberOS ISO
+
+on:
+  push:
+    paths:
+      - "CyberOS-standalone/**"
+      - ".github/workflows/cyberos-iso.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate CyberOS profile
+        run: bash CyberOS-standalone/tests/run-tests.sh
+
+      - name: Build ISO in Arch Linux
+        run: |
+          docker run --rm --privileged \
+            -v "$PWD/CyberOS-standalone:/src" \
+            -w /src \
+            archlinux:latest \
+            bash -lc 'bash ./build.sh'
+
+      - name: Upload ISO and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: CyberOS-ISO
+          path: |
+            CyberOS-standalone/out/*.iso
+            CyberOS-standalone/out/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
