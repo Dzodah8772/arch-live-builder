@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -u
+printf '=== CyberOS NVIDIA status ===\n'
+if ! command -v lspci >/dev/null 2>&1; then echo '[INFO] lspci unavailable.'; exit 0; fi
+if lspci | grep -Eiq 'NVIDIA'; then lspci | grep -Ei 'NVIDIA' || true; else echo '[INFO] NVIDIA GPU not detected.'; exit 0; fi
+command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi || echo '[INFO] nvidia-smi unavailable.'
