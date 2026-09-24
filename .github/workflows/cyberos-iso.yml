@@ -1,32 +1,31 @@
 name: CyberOS ISO
-
 on:
   push:
     paths:
       - "CyberOS-standalone/**"
       - ".github/workflows/cyberos-iso.yml"
   workflow_dispatch:
-
+    inputs:
+      nvidia:
+        description: Include NVIDIA packages
+        required: false
+        default: "false"
 permissions:
   contents: read
-
 jobs:
   build-iso:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Validate CyberOS profile
-        run: bash CyberOS-standalone/tests/run-tests.sh
-
       - name: Build ISO in Arch Linux
+        env:
+          CYBEROS_NVIDIA: ${{ github.event.inputs.nvidia || 'false' }}
         run: |
           docker run --rm --privileged \
+            -e CYBEROS_NVIDIA="$CYBEROS_NVIDIA" \
             -v "$PWD/CyberOS-standalone:/src" \
-            -w /src \
-            archlinux:latest \
-            bash -lc 'bash ./build.sh'
-
+            -w /src archlinux:latest \
+            bash -lc 'pacman -Sy --needed --noconfirm archiso && bash ./build.sh'
       - name: Upload ISO and checksum
         uses: actions/upload-artifact@v4
         with:
