@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -u
+echo 'CyberOS NVIDIA GPU diagnostic'
+command -v lspci >/dev/null 2>&1 && lspci | grep -Ei 'NVIDIA' || true
+command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi || echo 'nvidia-smi: unavailable'
+command -v nvcc >/dev/null 2>&1 && nvcc --version | tail -n 4 || echo 'nvcc: unavailable'
+command -v nvidia-ctk >/dev/null 2>&1 && nvidia-ctk --version || echo 'nvidia-ctk: unavailable'
