@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -u
+command -v docker >/dev/null 2>&1 || { echo 'Docker: not installed'; exit 1; }
+docker info >/dev/null 2>&1 || { echo 'Docker: daemon unavailable'; exit 1; }
+docker info --format '{{json .Runtimes}}' | grep -q '"nvidia"' && { echo 'Docker NVIDIA runtime: OK'; exit 0; }
+echo 'Docker NVIDIA runtime: NOT CONFIGURED'; exit 1
