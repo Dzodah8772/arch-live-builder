@@ -1,0 +1,4 @@
+# Optional NVIDIA profile for CyberOS
+nvidia-open
+nvidia-utils
+lib32-nvidia-utils
