@@ -24,7 +24,7 @@ jobs:
           docker run --rm --privileged \
             -e CYBEROS_NVIDIA="$CYBEROS_NVIDIA" \
             -v "$PWD/CyberOS-standalone:/src" \
-            -w /src archlinux:latest bash -lc './build.sh'
+            -w /src archlinux:latest bash -lc 'pacman -Sy --needed --noconfirm archiso && ./build.sh'
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
