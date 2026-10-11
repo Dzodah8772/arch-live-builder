@@ -13,6 +13,21 @@
 
 Скрипт автоматически установит `archiso` при необходимости и соберёт ISO в директорию `out/`.
 
+### Полезные опции
+
+```bash
+./scripts/build.sh --help
+./scripts/build.sh --outdir ./artifacts --workdir ./tmp/work
+./scripts/build.sh --keep-workdir
+```
+
+Переменные окружения (эквивалентны CLI-аргументам):
+- `PROFILE_NAME`
+- `WORKDIR`
+- `OUTDIR`
+- `SRCTEMPLATE`
+- `KEEP_WORKDIR=1`
+
 ## Сборка в Docker
 
 Для воспроизводимого окружения можно собрать ISO в контейнере:
