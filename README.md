@@ -1,39 +1,65 @@
-# ArchFlux OS — сборка live-ISO
+# CyberOS
 
-Этот репозиторий содержит заготовку для сборки Arch-based live ISO (ArchFlux OS) через `archiso`.
+CyberOS is an Arch Linux-based live ISO project focused on a reproducible build, a practical desktop environment, and a transparent installer workflow. The maintained standalone profile currently lives in `CyberOS-standalone/`.
 
-## Быстрый старт (локально)
+> **Project status:** experimental. Builds and profile checks are automated, but every ISO release still requires a real boot test in VirtualBox or on spare hardware before it should be considered usable.
 
-1. Убедитесь, что вы на Arch Linux (или в среде с `pacman`).
-2. Запустите скрипт сборки:
+## Current profile
+
+The standalone profile currently includes:
+
+- Arch Linux x86_64 and the i3 desktop
+- LightDM and Alacritty
+- Firefox and Thunar
+- NetworkManager and iwd
+- PipeWire audio
+- Btrfs utilities and zram-related packages
+- UEFI boot via systemd-boot and legacy BIOS boot via Syslinux
+- A custom `cyber-install` installer
+
+See [CyberOS-standalone/README.md](CyberOS-standalone/README.md) for the exact profile and build instructions. Features described as future work are not represented as implemented.
+
+## Build
+
+On Arch Linux:
 
 ```bash
-./scripts/build.sh
+sudo pacman -S --needed archiso
+cd CyberOS-standalone
+sudo ./build.sh
 ```
 
-Скрипт автоматически установит `archiso` при необходимости и соберёт ISO в директорию `out/`.
+The ISO and `SHA256SUMS` are written to `CyberOS-standalone/out/`.
 
-## Сборка в Docker
-
-Для воспроизводимого окружения можно собрать ISO в контейнере:
+The repository also contains a Docker-based build path. From the repository root:
 
 ```bash
-docker build -t archflux-builder .
+docker build --pull -t cyberos-builder .
+docker run --rm --privileged \
+  -v "$PWD/CyberOS-standalone/out:/workspace/out" \
+  cyberos-builder
 ```
 
-Запуск сборки:
+## Validate before building
 
 ```bash
-docker run --rm -v "$(pwd)":/workspace archflux-builder
+bash CyberOS-standalone/tests/run-tests.sh
 ```
 
-> Важно: контейнер использует `archiso`, поэтому необходим доступ к `pacman` зеркалам.
+These checks validate profile files and shell syntax. They do **not** replace boot testing. See [docs/TESTING.md](docs/TESTING.md).
 
-## Настройка содержимого ISO
+## Safety warning
 
-- `packages.x86_64` — список пакетов, который будет использован при сборке (в репозитории есть минимальный набор).
-- `airootfs/` — overlay директории, которые попадут в live-окружение (пример: `airootfs/etc/hostname`).
+The current `cyber-install` workflow is destructive in whole-disk mode: it repartitions the selected disk and erases existing data. Test only in a disposable virtual machine unless you have independently verified the target disk and backed up all important data. Never run the installer against a disk containing data you need to keep.
 
-## Полезные материалы
+## Contributing
 
-Список задач и план работ расположен в каталоге [`projects/`](projects/).
+Bug reports, reproducible test results, documentation improvements, and reviewed code contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+
+## Roadmap
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for planned work. Roadmap items are proposals until implemented and tested.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
