@@ -22,4 +22,11 @@ grep -q 'wipefs -af "$DISK"' "$ROOT/airootfs/usr/local/bin/cyber-install"
 grep -q 'Введите ERASE' "$ROOT/airootfs/usr/local/bin/cyber-install"
 grep -q 'parted -s "$DISK" mklabel gpt' "$ROOT/airootfs/usr/local/bin/cyber-install"
 
+# Regression checks: preserve a mounted output directory, clear its contents only,
+# and verify generated ISO checksums.
+grep -Fq 'find "$OUT_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +' "$ROOT/build.sh"
+! grep -Eq 'rm -rf[^\n]*out' "$ROOT/build.sh"
+grep -Fq 'sha256sum -c SHA256SUMS' "$ROOT/build.sh"
+grep -Fq 'iso_files=' "$ROOT/build.sh"
+
 echo "CyberOS profile tests: PASS"
