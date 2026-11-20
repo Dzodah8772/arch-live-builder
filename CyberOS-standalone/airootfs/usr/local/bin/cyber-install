@@ -3,22 +3,61 @@ set -euo pipefail
 clear
 cat /etc/issue
 
+if [[ ! -d /sys/firmware/efi ]]; then
+  echo "Установка CyberOS сейчас поддерживается только при загрузке ISO в режиме UEFI."
+  echo "Перезагрузитесь и выберите UEFI-запись USB/ISO."
+  exit 1
+fi
+
 if ! ping -c1 -W2 archlinux.org &>/dev/null; then
   echo "Нет подключения к интернету."
   echo "Подключитесь через iwctl или проверьте Ethernet, затем запустите cyber-install снова."
   exit 1
 fi
 
-lsblk -d -o NAME,SIZE,MODEL
+lsblk -o NAME,SIZE,MODEL,TYPE,MOUNTPOINTS
 echo
-read -rp "Целевой диск (/dev/sda или /dev/vda): " DISK
+read -rp "Целевой диск (например, /dev/sda): " DISK
+
 [[ -b "$DISK" ]] || { echo "Устройство не найдено."; exit 1; }
-read -rp "Введите ERASE для продолжения: " CONFIRM
-[[ "$CONFIRM" == "ERASE" ]] || exit 0
+[[ "$(lsblk -dn -o TYPE "$DISK")" == "disk" ]] || {
+  echo "Ошибка: выберите целый диск, а не раздел или другое блочное устройство."
+  exit 1
+}
+[[ "$(lsblk -dn -o RM "$DISK")" != "1" ]] || {
+  echo "Ошибка: съёмные диски запрещены для установки, чтобы защитить загрузочный носитель."
+  exit 1
+}
+if lsblk -nrpo MOUNTPOINT "$DISK" | grep -q '[^[:space:]]'; then
+  echo "Ошибка: на выбранном диске есть смонтированные разделы. Отмонтируйте их и повторите."
+  exit 1
+fi
+
+LIVE_SOURCE="$(findmnt -nro SOURCE /run/archiso/bootmnt 2>/dev/null || true)"
+if [[ -n "$LIVE_SOURCE" && "$LIVE_SOURCE" == /dev/* ]]; then
+  LIVE_PARENT="$(lsblk -dn -o PKNAME "$LIVE_SOURCE" 2>/dev/null || true)"
+  LIVE_DISK="/dev/${LIVE_PARENT:-$(basename "$LIVE_SOURCE")}"
+  if [[ "$DISK" == "$LIVE_DISK" ]]; then
+    echo "Ошибка: нельзя выбрать диск, с которого загружен Live ISO."
+    exit 1
+  fi
+fi
+
+echo
+echo "ВНИМАНИЕ: ВСЕ ДАННЫЕ НА ВЫБРАННОМ ДИСКЕ БУДУТ УДАЛЕНЫ."
+lsblk -d -o NAME,SIZE,MODEL "$DISK"
+read -rp "Для подтверждения введите ERASE $DISK: " CONFIRM
+[[ "$CONFIRM" == "ERASE $DISK" ]] || {
+  echo "Подтверждение не совпало. Установка отменена."
+  exit 0
+}
+
 read -rp "Часовой пояс [UTC]: " TZONE; TZONE=${TZONE:-UTC}
 [[ -f "/usr/share/zoneinfo/$TZONE" ]] || { echo "Неизвестная таймзона."; exit 1; }
 read -rp "Имя пользователя [cyber]: " USERNAME; USERNAME=${USERNAME:-cyber}
+[[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || { echo "Недопустимое имя пользователя."; exit 1; }
 read -rp "Имя хоста [cyberos]: " HOSTNAME; HOSTNAME=${HOSTNAME:-cyberos}
+[[ "$HOSTNAME" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,62}$ ]] || { echo "Недопустимое имя хоста."; exit 1; }
 while true; do
   read -rsp "Пароль: " PASS; echo
   read -rsp "Повторите пароль: " PASS2; echo
@@ -50,7 +89,6 @@ mount "$P1" /mnt/boot
 pacstrap -K /mnt base linux linux-firmware "$UCODE_PKG" btrfs-progs i3-wm i3status dmenu alacritty xorg-server xorg-xinit networkmanager iwd sudo nano vim zram-generator
 
 genfstab -U /mnt >>/mnt/etc/fstab
-printf '%s' "$PASS" >/tmp/cyberos-pass
 arch-chroot /mnt /bin/bash <<CHROOT
 set -e
 ln -sf "/usr/share/zoneinfo/$TZONE" /etc/localtime
@@ -86,9 +124,8 @@ zram-size = min(ram / 2, 2048)
 EOF
 chown -R "$USERNAME:$USERNAME" "/home/$USERNAME"
 CHROOT
-arch-chroot /mnt chpasswd <<<"$USERNAME:$PASS"
+printf '%s:%s\n' "$USERNAME" "$PASS" | arch-chroot /mnt chpasswd
 unset PASS PASS2
-rm -f /tmp/cyberos-pass
 trap - ERR
 echo "Установка CyberOS завершена. Извлеките ISO и перезагрузитесь."
 read -rp "Нажмите Enter для перезагрузки..."
