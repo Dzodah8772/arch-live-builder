@@ -7,6 +7,9 @@ test -f "$ROOT/pacman.conf"
 test -f "$ROOT/packages.x86_64"
 test -f "$ROOT/airootfs/usr/local/bin/cyber-install"
 
+# i3-wm supplies this session entry; a profile overlay would conflict during pacman install.
+test ! -f "$ROOT/airootfs/usr/share/xsessions/i3.desktop"
+
 grep -q 'uefi.systemd-boot' "$ROOT/profiledef.sh"
 grep -q 'bios.syslinux' "$ROOT/profiledef.sh"
 grep -q '^base$' "$ROOT/packages.x86_64"
