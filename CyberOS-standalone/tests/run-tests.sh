@@ -23,6 +23,11 @@ bash -n "$ROOT/airootfs/usr/local/bin/cyber-install"
 
 grep -q 'wipefs -af "$DISK"' "$ROOT/airootfs/usr/local/bin/cyber-install"
 grep -q 'Введите ERASE' "$ROOT/airootfs/usr/local/bin/cyber-install"
+grep -q 'ERASE $DISK' "$ROOT/airootfs/usr/local/bin/cyber-install"
+grep -q 'lsblk -dn -o TYPE "$DISK"' "$ROOT/airootfs/usr/local/bin/cyber-install"
+grep -q 'lsblk -nrpo MOUNTPOINT "$DISK"' "$ROOT/airootfs/usr/local/bin/cyber-install"
+grep -q '/sys/firmware/efi' "$ROOT/airootfs/usr/local/bin/cyber-install"
+! grep -q '/tmp/cyberos-pass' "$ROOT/airootfs/usr/local/bin/cyber-install"
 grep -q 'parted -s "$DISK" mklabel gpt' "$ROOT/airootfs/usr/local/bin/cyber-install"
 
 # Regression checks: preserve a mounted output directory, clear its contents only,
