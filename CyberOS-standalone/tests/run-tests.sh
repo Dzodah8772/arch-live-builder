@@ -22,7 +22,7 @@ bash -n "$ROOT/build.sh"
 bash -n "$ROOT/airootfs/usr/local/bin/cyber-install"
 
 grep -q 'wipefs -af "$DISK"' "$ROOT/airootfs/usr/local/bin/cyber-install"
-grep -q 'Введите ERASE' "$ROOT/airootfs/usr/local/bin/cyber-install"
+grep -q 'введите ERASE' "$ROOT/airootfs/usr/local/bin/cyber-install"
 grep -q 'ERASE $DISK' "$ROOT/airootfs/usr/local/bin/cyber-install"
 grep -q 'lsblk -dn -o TYPE "$DISK"' "$ROOT/airootfs/usr/local/bin/cyber-install"
 grep -q 'lsblk -nrpo MOUNTPOINT "$DISK"' "$ROOT/airootfs/usr/local/bin/cyber-install"
